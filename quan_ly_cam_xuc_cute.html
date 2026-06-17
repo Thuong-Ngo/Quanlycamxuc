@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nhật ký cảm xúc</title>
+<style>
+body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#ffd6e7,#e8d8ff,#fff5fa);margin:0;padding:20px;color:#555}
+.container{max-width:1200px;margin:auto}
+h1{text-align:center;color:#ff5c8a}
+.card{background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 15px rgba(0,0,0,.08);margin-bottom:20px}
+.calendar{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.day{background:#fff7fb;border:2px solid #ffd6e7;border-radius:14px;padding:10px}
+select,textarea{width:100%;border:1px solid #f3bfd3;border-radius:10px;padding:8px;box-sizing:border-box}
+textarea{height:60px;resize:vertical}
+button{background:#ff77a9;color:white;border:none;padding:10px 15px;border-radius:10px;cursor:pointer}
+.stat{background:#fff0f7;padding:8px;border-radius:10px;margin:6px 0}
+.fall{position:fixed;top:-20px;animation:fall linear infinite;opacity:.7}
+@keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🌸 Nhật Ký Cảm Xúc Tháng 🌸</h1>
+
+<div class="card">
+<h2>📅 Lịch cảm xúc</h2>
+<div id="calendar" class="calendar"></div>
+<br>
+<button onclick="exportCSV()">📄 Xuất CSV</button>
+<button onclick="resetData()">🗑️ Xóa dữ liệu</button>
+</div>
+
+<div class="card">
+<h2>📊 Thống kê tháng</h2>
+<div id="stats"></div>
+</div>
+</div>
+
+<script>
+const emotions=["😍 Rất vui","🥰 Hạnh phúc","😊 Vui","😌 Bình yên","🤩 Phấn khích","😴 Mệt mỏi","😢 Buồn","😭 Khóc nhiều","😤 Căng thẳng","😡 Tức giận","🤔 Suy tư","😎 Tự tin"];
+const days=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
+
+function build(){
+ let c=document.getElementById("calendar");
+ for(let i=1;i<=days;i++){
+   let e=localStorage.getItem("emo_"+i)||"";
+   let n=localStorage.getItem("note_"+i)||"";
+   let opts='<option value="">--Chọn cảm xúc--</option>';
+   emotions.forEach(x=>opts+=`<option ${x==e?'selected':''}>${x}</option>`);
+   c.innerHTML+=`<div class="day">
+   <b>Ngày ${i}</b><br><br>
+   <select onchange="saveE(${i},this.value)">${opts}</select><br><br>
+   <textarea placeholder="Ghi chú..." onkeyup="saveN(${i},this.value)">${n}</textarea>
+   </div>`;
+ }
+ stats();
+ sakura();
+}
+function saveE(d,v){localStorage.setItem("emo_"+d,v);stats();}
+function saveN(d,v){localStorage.setItem("note_"+d,v);}
+function stats(){
+ let cnt={}; emotions.forEach(e=>cnt[e]=0);
+ let total=0;
+ for(let i=1;i<=days;i++){
+   let e=localStorage.getItem("emo_"+i);
+   if(e){cnt[e]++;total++;}
+ }
+ let h=`<p>💕 Đã ghi nhận <b>${total}/${days}</b> ngày</p>`;
+ emotions.forEach(e=>{
+  if(cnt[e]>0){
+   h+=`<div class="stat">${e}: <b>${cnt[e]}</b> lần (${(cnt[e]/total*100).toFixed(1)}%)</div>`;
+  }
+ });
+ document.getElementById("stats").innerHTML=h;
+}
+function exportCSV(){
+ let csv="Ngay,Cam Xuc,Ghi Chu\n";
+ for(let i=1;i<=days;i++){
+  csv+=`${i},"${localStorage.getItem("emo_"+i)||''}","${localStorage.getItem("note_"+i)||''}"\n`;
+ }
+ let blob=new Blob([csv],{type:"text/csv"});
+ let a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="nhat_ky_cam_xuc.csv";
+ a.click();
+}
+function resetData(){
+ if(confirm("Xóa toàn bộ dữ liệu?")){
+   for(let i=1;i<=days;i++){localStorage.removeItem("emo_"+i);localStorage.removeItem("note_"+i);}
+   location.reload();
+ }
+}
+function sakura(){
+ for(let i=0;i<25;i++){
+   let s=document.createElement("div");
+   s.className="fall";
+   s.innerHTML="🌸";
+   s.style.left=Math.random()*100+"vw";
+   s.style.animationDuration=(5+Math.random()*8)+"s";
+   s.style.fontSize=(16+Math.random()*20)+"px";
+   document.body.appendChild(s);
+ }
+}
+build();
+</script>
+</body>
+</html>
