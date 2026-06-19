@@ -17,11 +17,13 @@ button{background:#ff77a9;color:white;border:none;padding:10px 15px;border-radiu
 .stat{background:#fff0f7;padding:8px;border-radius:10px;margin:6px 0}
 .fall{position:fixed;top:-20px;animation:fall linear infinite;opacity:.7}
 @keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
+#status{text-align:center;font-size:13px;color:#aaa;margin-top:-8px;margin-bottom:10px}
 </style>
 </head>
 <body>
 <div class="container">
 <h1>🌸 Nhật Ký Cảm Xúc Tháng 🌸</h1>
+<div id="status">Đang kết nối Firebase...</div>
 
 <div class="card">
 <h2>📅 Lịch cảm xúc</h2>
@@ -37,17 +39,71 @@ button{background:#ff77a9;color:white;border:none;padding:10px 15px;border-radiu
 </div>
 </div>
 
+<!-- Firebase SDK (compat version - dễ dùng với script thường, không cần module) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
 <script>
+/* ============================================
+   ⚠️ DÁN CONFIG FIREBASE CỦA BẠN VÀO ĐÂY ⚠️
+   Lấy từ: Firebase Console > Project settings > Your apps
+   ============================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDVsR4YD3PR4hhJi4VoXnXntO5U84oAovU",
+  authDomain: "my-emotion-c398c.firebaseapp.com",
+  projectId: "my-emotion-c398c",
+  storageBucket: "my-emotion-c398c.firebasestorage.app",
+  messagingSenderId: "495814169506",
+  appId: "1:495814169506:web:c75affbff9814777c158fb"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 const emotions=["😍 Rất vui","🥰 Hạnh phúc","😊 Vui","😌 Bình yên","🤩 Phấn khích","😴 Mệt mỏi","😢 Buồn","😭 Khóc nhiều","😤 Căng thẳng","😡 Tức giận","🤔 Suy tư","😎 Tự tin"];
-const days=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
+
+const now = new Date();
+const year = now.getFullYear();
+const month = now.getMonth()+1; // 1-12
+const days = new Date(year, month, 0).getDate();
+
+// ID document cho tháng hiện tại, ví dụ "2026_6"
+const docId = `${year}_${month}`;
+const docRef = db.collection("diary").doc(docId);
+
+// Cache dữ liệu cục bộ, đồng bộ realtime với Firestore
+let monthData = {}; // { "1": {emo, note}, "2": {...}, ... }
+let isFirstLoad = true;
+
+function setStatus(text, color){
+  const s = document.getElementById("status");
+  s.textContent = text;
+  if(color) s.style.color = color;
+}
+
+// Lắng nghe realtime: mỗi khi dữ liệu trên Firestore đổi (kể cả từ thiết bị khác), tự cập nhật UI
+docRef.onSnapshot(
+  (snap) => {
+    monthData = (snap.exists && snap.data().days) ? snap.data().days : {};
+    setStatus("✅ Đã đồng bộ với Firebase", "#7bc47f");
+    build(); // vẽ lại lịch + thống kê mỗi khi có dữ liệu mới
+    if(isFirstLoad){ isFirstLoad = false; }
+  },
+  (err) => {
+    console.error(err);
+    setStatus("⚠️ Lỗi kết nối Firebase: " + err.message, "#e05c5c");
+  }
+);
 
 function build(){
  let c=document.getElementById("calendar");
+ c.innerHTML = "";
  for(let i=1;i<=days;i++){
-   let e=localStorage.getItem("emo_"+i)||"";
-   let n=localStorage.getItem("note_"+i)||"";
+   let entry = monthData[i] || {};
+   let e = entry.emo || "";
+   let n = entry.note || "";
    let opts='<option value="">--Chọn cảm xúc--</option>';
-   emotions.forEach(x=>opts+=`<option ${x==e?'selected':''}>${x}</option>`);
+   emotions.forEach(x=>opts+=`<option ${x===e?'selected':''}>${x}</option>`);
    c.innerHTML+=`<div class="day">
    <b>Ngày ${i}</b><br><br>
    <select onchange="saveE(${i},this.value)">${opts}</select><br><br>
@@ -57,13 +113,25 @@ function build(){
  stats();
  sakura();
 }
-function saveE(d,v){localStorage.setItem("emo_"+d,v);stats();}
-function saveN(d,v){localStorage.setItem("note_"+d,v);}
+
+// Lưu cảm xúc của 1 ngày lên Firestore (chỉ cập nhật field của ngày đó)
+function saveE(d, v){
+  docRef.set({
+    days: { [d]: { emo: v, note: (monthData[d] && monthData[d].note) || "" } }
+  }, { merge: true }).catch(err => setStatus("⚠️ Lỗi lưu: "+err.message, "#e05c5c"));
+}
+
+function saveN(d, v){
+  docRef.set({
+    days: { [d]: { emo: (monthData[d] && monthData[d].emo) || "", note: v } }
+  }, { merge: true }).catch(err => setStatus("⚠️ Lỗi lưu: "+err.message, "#e05c5c"));
+}
+
 function stats(){
  let cnt={}; emotions.forEach(e=>cnt[e]=0);
  let total=0;
  for(let i=1;i<=days;i++){
-   let e=localStorage.getItem("emo_"+i);
+   let e = monthData[i] && monthData[i].emo;
    if(e){cnt[e]++;total++;}
  }
  let h=`<p>💕 Đã ghi nhận <b>${total}/${days}</b> ngày</p>`;
@@ -74,10 +142,12 @@ function stats(){
  });
  document.getElementById("stats").innerHTML=h;
 }
+
 function exportCSV(){
  let csv="Ngay,Cam Xuc,Ghi Chu\n";
  for(let i=1;i<=days;i++){
-  csv+=`${i},"${localStorage.getItem("emo_"+i)||''}","${localStorage.getItem("note_"+i)||''}"\n`;
+  let entry = monthData[i] || {};
+  csv+=`${i},"${entry.emo||''}","${entry.note||''}"\n`;
  }
  let blob=new Blob([csv],{type:"text/csv"});
  let a=document.createElement("a");
@@ -85,13 +155,18 @@ function exportCSV(){
  a.download="nhat_ky_cam_xuc.csv";
  a.click();
 }
+
 function resetData(){
- if(confirm("Xóa toàn bộ dữ liệu?")){
-   for(let i=1;i<=days;i++){localStorage.removeItem("emo_"+i);localStorage.removeItem("note_"+i);}
-   location.reload();
+ if(confirm("Xóa toàn bộ dữ liệu tháng này trên Firebase?")){
+   docRef.set({ days: {} })
+     .then(()=> setStatus("🗑️ Đã xóa dữ liệu", "#aaa"))
+     .catch(err => setStatus("⚠️ Lỗi xóa: "+err.message, "#e05c5c"));
  }
 }
+
 function sakura(){
+ // tránh tạo trùng hoa khi build() gọi lại nhiều lần
+ document.querySelectorAll(".fall").forEach(el=>el.remove());
  for(let i=0;i<25;i++){
    let s=document.createElement("div");
    s.className="fall";
@@ -102,7 +177,6 @@ function sakura(){
    document.body.appendChild(s);
  }
 }
-build();
 </script>
 </body>
 </html>
